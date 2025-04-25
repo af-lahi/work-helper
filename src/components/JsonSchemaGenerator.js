@@ -11,7 +11,7 @@ import {
   Divider,
   Tooltip
 } from '@mui/material';
-import { ContentCopy, Info } from '@mui/icons-material';
+import { ContentCopy } from '@mui/icons-material';
 import Editor from '@monaco-editor/react';
 import Ajv from 'ajv';
 

@@ -5,17 +5,14 @@ import {
   TextField,
   Typography,
   Button,
-  Chip,
   Select,
   MenuItem,
-  FormControl,
-  InputLabel,
   Alert,
   Snackbar,
   Divider,
   Tooltip
 } from '@mui/material';
-import { ContentCopy, Info, ErrorOutline, Schedule } from '@mui/icons-material';
+import { ContentCopy, Schedule } from '@mui/icons-material';
 import parser from 'cron-parser';
 import cronstrue from 'cronstrue';
 import { format } from 'date-fns';
