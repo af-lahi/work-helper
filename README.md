@@ -1,12 +1,66 @@
-# React + Vite
+# Testing Tools Web
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A collection of useful web-based testing and development tools built with React and Material-UI.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+### 1. JSON Diff Tool
+- Compare two JSON objects and visualize the differences
+- Highlight added, removed, and modified properties
+- Copy differences to clipboard
 
-## Expanding the ESLint configuration
+### 2. SQL Diff Tool
+- Compare two SQL queries and identify differences
+- Syntax highlighting for SQL
+- Easy-to-read diff visualization
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+### 3. Unix Time Converter
+- Convert between Unix timestamps and human-readable dates
+- Support for milliseconds and seconds
+- Current time display
+- Copy timestamps to clipboard
+
+### 4. JWT Debugger
+- Decode and validate JSON Web Tokens
+- View token header and payload in formatted JSON
+- Copy decoded sections to clipboard
+- Clear and intuitive interface
+
+## Tech Stack
+
+- React 18
+- Material-UI (MUI)
+- React Router
+- Vite
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (v14 or higher)
+- npm or yarn
+
+### Installation
+
+1. Clone the repository:
+```bash
+git clone https://github.com/yourusername/testing-tools-web.git
+cd testing-tools-web
+```
+
+2. Install dependencies:
+```bash
+npm install
+# or
+yarn install
+```
+
+3. Start the development server:
+```bash
+npm run dev
+# or
+yarn dev
+```
+
+4. Open [http://localhost:5173](http://localhost:5173) in your browser
+
