@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Box, 
   Paper, 
@@ -16,7 +16,7 @@ import {
 import Editor from '@monaco-editor/react';
 import CompareArrowsIcon from '@mui/icons-material/CompareArrows';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { format } from 'sql-formatter';
 
 const SQL_DIALECTS = [
@@ -32,21 +32,37 @@ const SQL_DIALECTS = [
 
 const SqlDiffTool = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const theme = useTheme();
-  const diffRef = useRef(null);
   const [leftValue, setLeftValue] = useState('');
   const [rightValue, setRightValue] = useState('');
   const [error, setError] = useState('');
   const [showDiff, setShowDiff] = useState(false);
   const [diffResult, setDiffResult] = useState({ left: [], right: [] });
   const [dialect, setDialect] = useState('sql');
+  const [leftEditor, setLeftEditor] = useState(null);
+  const [rightEditor, setRightEditor] = useState(null);
 
-  const formatSql = (sql, dialect) => {
-    try {
-      if (!sql.trim()) return '';
-      return format(sql, { language: dialect });
-    } catch (e) {
-      return sql;
+  // Restore values when navigating back from diff view
+  useEffect(() => {
+    const state = location.state;
+    if (state?.leftValue !== undefined) {
+      setLeftValue(state.leftValue);
+      if (leftEditor) {
+        leftEditor.setValue(state.leftValue);
+      }
+    }
+    if (state?.rightValue !== undefined) {
+      setRightValue(state.rightValue);
+      if (rightEditor) {
+        rightEditor.setValue(state.rightValue);
+      }
+    }
+  }, [location.state, leftEditor, rightEditor]);
+
+  const resetScroll = (editor) => {
+    if (editor) {
+      editor.revealPositionInCenter({ lineNumber: 1, column: 1 });
     }
   };
 
@@ -60,67 +76,174 @@ const SqlDiffTool = () => {
     setShowDiff(false);
   };
 
+  const handleLeftEditorDidMount = (editor) => {
+    setLeftEditor(editor);
+  };
+
+  const handleRightEditorDidMount = (editor) => {
+    setRightEditor(editor);
+  };
+
+  const formatSql = (sql, dialect) => {
+    try {
+      if (!sql.trim()) return '';
+      // Add semicolon if missing to ensure proper formatting
+      const sqlWithSemicolon = sql.trim().endsWith(';') ? sql : sql + ';';
+      const formatted = format(sqlWithSemicolon, { 
+        language: dialect,
+        uppercase: true,
+        linesBetweenQueries: 2
+      });
+      return formatted;
+    } catch (e) {
+      console.error('SQL formatting error:', e);
+      return sql;
+    }
+  };
+
+  const minifySql = (sql) => {
+    try {
+      if (!sql.trim()) return '';
+      // Remove comments
+      const withoutComments = sql.replace(/--.*$/gm, '')
+                               .replace(/\/\*[\s\S]*?\*\//g, '');
+      
+      // Remove extra whitespace and newlines
+      const minified = withoutComments
+        .replace(/\s+/g, ' ')
+        .replace(/\s*([,;()])\s*/g, '$1')
+        .trim();
+      
+      return minified;
+    } catch (e) {
+      console.error('SQL minification error:', e);
+      return sql;
+    }
+  };
+
+  const handleLeftBeautify = () => {
+    const formatted = formatSql(leftValue, dialect);
+    setLeftValue(formatted);
+    if (leftEditor) {
+      leftEditor.setValue(formatted);
+      resetScroll(leftEditor);
+    }
+  };
+
+  const handleLeftMinify = () => {
+    const minified = minifySql(leftValue);
+    setLeftValue(minified);
+    if (leftEditor) {
+      leftEditor.setValue(minified);
+      resetScroll(leftEditor);
+    }
+  };
+
+  const handleRightBeautify = () => {
+    const formatted = formatSql(rightValue, dialect);
+    setRightValue(formatted);
+    if (rightEditor) {
+      rightEditor.setValue(formatted);
+      resetScroll(rightEditor);
+    }
+  };
+
+  const handleRightMinify = () => {
+    const minified = minifySql(rightValue);
+    setRightValue(minified);
+    if (rightEditor) {
+      rightEditor.setValue(minified);
+      resetScroll(rightEditor);
+    }
+  };
+
+  const handleLeftReset = () => {
+    setLeftValue('');
+    if (leftEditor) {
+      leftEditor.setValue('');
+      resetScroll(leftEditor);
+    }
+  };
+
+  const handleRightReset = () => {
+    setRightValue('');
+    if (rightEditor) {
+      rightEditor.setValue('');
+      resetScroll(rightEditor);
+    }
+  };
+
   const calculateDiff = () => {
     try {
       setError('');
       if (!leftValue && !rightValue) {
-        setError('Please enter SQL in both editors');
+        setError('Please enter SQL in at least one editor');
         return;
       }
 
+      // Format SQL statements
       const leftFormatted = formatSql(leftValue, dialect);
       const rightFormatted = formatSql(rightValue, dialect);
       
       const leftLines = leftFormatted.split('\n');
       const rightLines = rightFormatted.split('\n');
       
-      const diff = {
-        left: leftLines.map(line => ({ text: line, type: 'unchanged' })),
-        right: rightLines.map(line => ({ text: line, type: 'unchanged' }))
+      const diffLines = new Set();
+      const processedLines = new Set();
+
+      // Compare lines and find differences
+      const findDifferences = () => {
+        // Compare each line in both SQL statements
+        leftLines.forEach((leftLine, leftIndex) => {
+          const trimmedLeft = leftLine.trim();
+          if (!trimmedLeft) return;
+
+          let found = false;
+          rightLines.forEach((rightLine, rightIndex) => {
+            if (processedLines.has(rightIndex)) return;
+            
+            const trimmedRight = rightLine.trim();
+            if (!trimmedRight) return;
+
+            if (trimmedLeft === trimmedRight) {
+              found = true;
+              processedLines.add(rightIndex);
+              return;
+            }
+          });
+
+          if (!found) {
+            diffLines.add(leftIndex);
+          }
+        });
+
+        // Check for lines in right that weren't matched
+        rightLines.forEach((rightLine, rightIndex) => {
+          if (processedLines.has(rightIndex)) return;
+          
+          const trimmedRight = rightLine.trim();
+          if (!trimmedRight) return;
+
+          diffLines.add(rightIndex);
+        });
       };
 
-      // Find differences
-      for (let i = 0; i < Math.max(leftLines.length, rightLines.length); i++) {
-        const leftLine = leftLines[i] || '';
-        const rightLine = rightLines[i] || '';
-        
-        if (leftLine !== rightLine) {
-          if (leftLine) {
-            diff.left[i] = { text: leftLine, type: 'removed' };
-          }
-          if (rightLine) {
-            diff.right[i] = { text: rightLine, type: 'added' };
-          }
+      findDifferences();
+
+      // Navigate to diff view with the results
+      navigate('/sql-diff-view', {
+        state: {
+          leftLines,
+          rightLines,
+          diffLines: Array.from(diffLines).sort((a, b) => a - b),
+          leftValue,
+          rightValue,
+          dialect
         }
-      }
-
-      setDiffResult(diff);
-      setShowDiff(true);
-      setTimeout(() => {
-        diffRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 100);
+      });
     } catch (error) {
-      setError('Invalid SQL format');
-      setShowDiff(false);
+      setError('Error comparing SQL: ' + error.message);
     }
-  };
-
-  const renderDiffLine = (line) => {
-    const style = {
-      padding: '2px 4px',
-      margin: '1px 0',
-      fontFamily: 'monospace',
-      whiteSpace: 'pre-wrap',
-      backgroundColor: line.type === 'added' ? 'rgba(76, 175, 80, 0.2)' : 
-                     line.type === 'removed' ? 'rgba(244, 67, 54, 0.2)' : 'transparent',
-      color: theme.palette.mode === 'dark' ? '#fff' : '#000'
-    };
-
-    return (
-      <div style={style}>
-        {line.text}
-      </div>
-    );
   };
 
   return (
@@ -129,16 +252,16 @@ const SqlDiffTool = () => {
         <IconButton onClick={() => navigate('/')} sx={{ mr: 2 }}>
           <ArrowBackIcon />
         </IconButton>
-        <FormControl sx={{ minWidth: 200, mr: 2 }}>
+        <FormControl sx={{ minWidth: 200 }}>
           <InputLabel>SQL Dialect</InputLabel>
           <Select
             value={dialect}
             label="SQL Dialect"
             onChange={(e) => setDialect(e.target.value)}
           >
-            {SQL_DIALECTS.map((option) => (
-              <MenuItem key={option.value} value={option.value}>
-                {option.label}
+            {SQL_DIALECTS.map((d) => (
+              <MenuItem key={d.value} value={d.value}>
+                {d.label}
               </MenuItem>
             ))}
           </Select>
@@ -149,16 +272,19 @@ const SqlDiffTool = () => {
           {error}
         </Alert>
       )}
-      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mb: 2, height: 'calc(100vh - 200px)' }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, height: 'calc(100vh - 200px)', position: 'relative' }}>
         <Paper elevation={3} sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
           <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6">Original SQL</Typography>
             <ButtonGroup size="small" variant="contained">
-              <Button onClick={() => setLeftValue(formatSql(leftValue, dialect))}>
+              <Button onClick={handleLeftBeautify}>
                 Beautify
               </Button>
-              <Button onClick={() => setLeftValue(leftValue.replace(/\s+/g, ' ').trim())}>
+              <Button onClick={handleLeftMinify}>
                 Minify
+              </Button>
+              <Button onClick={handleLeftReset} color="error">
+                Reset
               </Button>
             </ButtonGroup>
           </Box>
@@ -167,6 +293,7 @@ const SqlDiffTool = () => {
               height="100%"
               defaultLanguage="sql"
               value={leftValue}
+              defaultValue=""
               onChange={handleLeftChange}
               theme={theme.palette.mode === 'dark' ? 'vs-dark' : 'light'}
               options={{
@@ -178,6 +305,7 @@ const SqlDiffTool = () => {
                 scrollBeyondLastLine: false,
                 automaticLayout: true,
               }}
+              onMount={handleLeftEditorDidMount}
             />
           </Box>
         </Paper>
@@ -185,11 +313,14 @@ const SqlDiffTool = () => {
           <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Typography variant="h6">Modified SQL</Typography>
             <ButtonGroup size="small" variant="contained">
-              <Button onClick={() => setRightValue(formatSql(rightValue, dialect))}>
+              <Button onClick={handleRightBeautify}>
                 Beautify
               </Button>
-              <Button onClick={() => setRightValue(rightValue.replace(/\s+/g, ' ').trim())}>
+              <Button onClick={handleRightMinify}>
                 Minify
+              </Button>
+              <Button onClick={handleRightReset} color="error">
+                Reset
               </Button>
             </ButtonGroup>
           </Box>
@@ -198,6 +329,7 @@ const SqlDiffTool = () => {
               height="100%"
               defaultLanguage="sql"
               value={rightValue}
+              defaultValue=""
               onChange={handleRightChange}
               theme={theme.palette.mode === 'dark' ? 'vs-dark' : 'light'}
               options={{
@@ -209,59 +341,33 @@ const SqlDiffTool = () => {
                 scrollBeyondLastLine: false,
                 automaticLayout: true,
               }}
+              onMount={handleRightEditorDidMount}
             />
           </Box>
         </Paper>
+        <Box sx={{ 
+          position: 'absolute', 
+          left: '50%', 
+          top: '50%', 
+          transform: 'translate(-50%, -50%)',
+          zIndex: 1
+        }}>
+          <Button
+            variant="contained"
+            onClick={calculateDiff}
+            disabled={!leftValue || !rightValue}
+            sx={{ 
+              minWidth: '40px',
+              width: '40px',
+              height: '40px',
+              borderRadius: '50%',
+              p: 0
+            }}
+          >
+            <CompareArrowsIcon />
+          </Button>
+        </Box>
       </Box>
-      <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2, position: 'sticky', top: 0, zIndex: 1, backgroundColor: theme.palette.background.default, padding: '8px 0' }}>
-        <Button
-          variant="contained"
-          startIcon={<CompareArrowsIcon />}
-          onClick={calculateDiff}
-          disabled={!leftValue || !rightValue}
-        >
-          Compare SQL
-        </Button>
-      </Box>
-      {showDiff && (
-        <Paper elevation={3} sx={{ height: 'calc(100vh - 200px)' }} ref={diffRef}>
-          <Typography variant="h6" sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-            Differences
-          </Typography>
-          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, p: 2, height: 'calc(100% - 64px)', overflow: 'auto' }}>
-            <Box sx={{ 
-              fontFamily: 'monospace', 
-              fontSize: '14px',
-              backgroundColor: 'background.paper',
-              borderRadius: '4px',
-              padding: '8px',
-              overflow: 'auto',
-              height: '100%'
-            }}>
-              {diffResult.left.map((line, index) => (
-                <div key={index}>
-                  {renderDiffLine(line)}
-                </div>
-              ))}
-            </Box>
-            <Box sx={{ 
-              fontFamily: 'monospace', 
-              fontSize: '14px',
-              backgroundColor: 'background.paper',
-              borderRadius: '4px',
-              padding: '8px',
-              overflow: 'auto',
-              height: '100%'
-            }}>
-              {diffResult.right.map((line, index) => (
-                <div key={index}>
-                  {renderDiffLine(line)}
-                </div>
-              ))}
-            </Box>
-          </Box>
-        </Paper>
-      )}
     </Box>
   );
 };

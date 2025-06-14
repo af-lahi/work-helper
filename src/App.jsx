@@ -5,7 +5,8 @@ import {
   CssBaseline,
   Box,
   Container,
-  CircularProgress
+  CircularProgress,
+  useMediaQuery
 } from '@mui/material';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import JsonDiffTool from './components/JsonDiffTool';
@@ -14,9 +15,12 @@ import Navbar from './components/Navbar';
 import SqlDiffTool from './components/SqlDiffTool';
 import UnixTimeConverter from './components/UnixTimeConverter';
 import JwtDebugger from './components/JwtDebugger';
+import SqlDiffView from './components/SqlDiffView';
+import JsonDiffView from './components/JsonDiffView';
 
 function App() {
-  const [mode, setMode] = useState('dark');
+  const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
+  const [mode, setMode] = useState(prefersDarkMode ? 'dark' : 'light');
   const [isThemeReady, setIsThemeReady] = useState(false);
 
   const theme = useMemo(
@@ -112,6 +116,8 @@ function App() {
               <Route path="/" element={<LandingPage />} />
               <Route path="/json-diff" element={<JsonDiffTool />} />
               <Route path="/sql-diff" element={<SqlDiffTool />} />
+              <Route path="/sql-diff-view" element={<SqlDiffView />} />
+              <Route path="/json-diff-view" element={<JsonDiffView />} />
               <Route path="/unix-converter" element={<UnixTimeConverter />} />
               <Route path="/jwt-debugger" element={<JwtDebugger />} />
             </Routes>
